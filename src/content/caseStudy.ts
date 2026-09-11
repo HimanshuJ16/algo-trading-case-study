@@ -9,8 +9,6 @@
  * figures appear anywhere.
  */
 
-export type Theme = "ink" | "slate" | "ember" | "paper";
-
 export type Stat = {
   label: string;
   /** Display string. `null` = NEEDS INPUT, tile is skipped. */
@@ -19,11 +17,14 @@ export type Stat = {
 };
 
 export type SectionMeta = {
+  /** Anchor id, and the order the page reads in: ch1 … ch8. */
   id: string;
+  /** Stable semantic name, independent of chapter order. */
+  slug: string;
   index: string;
+  /** Chapter label on the header, the contents list and the rail. */
   kicker: string;
   title: string;
-  theme: Theme;
 };
 
 export const site = {
@@ -34,21 +35,27 @@ export const site = {
   year: "2026",
 } as const;
 
-/** Ordered list of page sections. Used by the contents nav and section chrome. */
+/**
+ * The eight chapters, in reading order. The page is framed as a build log,
+ * so the order is the order the system was built in rather than the order a
+ * reference document would use: the rule comes before the wiring, and what
+ * broke comes before what was drawn to stop it breaking again.
+ */
 export const sections: SectionMeta[] = [
-  { id: "overview", index: "01", kicker: "Overview", title: "What it is, and what it is not", theme: "ink" },
-  { id: "architecture", index: "02", kicker: "Architecture", title: "Four services, one room", theme: "slate" },
-  { id: "trade", index: "03", kicker: "A trade, scrubbed", title: "Entry, ratchet, exit", theme: "ink" },
-  { id: "strategy", index: "04", kicker: "Strategy stack", title: "Seven layers between a signal and an order", theme: "ember" },
-  { id: "problems", index: "05", kicker: "Hard problems", title: "Six things that were harder than they look", theme: "ink" },
-  { id: "surfaces", index: "06", kicker: "Surfaces", title: "The desk and the phone", theme: "slate" },
-  { id: "numbers", index: "07", kicker: "By the numbers", title: "What the repos actually contain", theme: "paper" },
-  { id: "next", index: "08", kicker: "Next", title: "What is still unproven", theme: "paper" },
+  { id: "ch1", slug: "overview", index: "01", kicker: "First, one process", title: "What it is, and what it is not" },
+  { id: "ch2", slug: "trade", index: "02", kicker: "Then, a rule", title: "Entry, ratchet, exit" },
+  { id: "ch3", slug: "strategy", index: "03", kicker: "Then, the walls", title: "Seven layers between a signal and an order" },
+  { id: "ch4", slug: "problems", index: "04", kicker: "Then it broke", title: "Six things that were harder than they look" },
+  { id: "ch5", slug: "architecture", index: "05", kicker: "Then, the wire", title: "Four services, one room" },
+  { id: "ch6", slug: "surfaces", index: "06", kicker: "Then, the room", title: "The desk and the phone" },
+  { id: "ch7", slug: "numbers", index: "07", kicker: "Then, the audit", title: "What the repos actually contain" },
+  { id: "ch8", slug: "next", index: "08", kicker: "Still unproven", title: "What is still unproven" },
 ];
 
-export const sectionById = (id: string) => {
-  const s = sections.find((x) => x.id === id);
-  if (!s) throw new Error(`Unknown section ${id}`);
+/** Look a chapter up by its stable slug, not by its position in the log. */
+export const sectionBySlug = (slug: string) => {
+  const s = sections.find((x) => x.slug === slug);
+  if (!s) throw new Error(`Unknown section ${slug}`);
   return s;
 };
 
@@ -57,7 +64,8 @@ export const sectionById = (id: string) => {
 export const hero = {
   eyebrow: "Case study · Engineering write-up",
   meta: "NSE equities · Nifty options · 2026",
-  /** The accent word is set in the display serif italic. */
+  kicker: "A build log · eight chapters",
+  /** Split per word and masked; the accent half is set in amber. */
   headline: {
     lead: "One thread is allowed to",
     accent: "move money.",
@@ -226,13 +234,6 @@ export type Layer = {
 };
 
 export const strategy = {
-  funnel: {
-    title: "Signals in, orders out",
-    caption:
-      "A small rigid-body world. Signals fall as discs through seven gates, one per layer. Each disc drops onto a pin at the next gate and is thrown either forward, down the slope into that gate's gap, or back, into the gutter, where it is vetoed. Nothing is scripted: the geometry and the disc's momentum decide, and only a fraction reach the floor as orders.",
-    alt: "A physics simulation of discs falling through seven stepped gates, some deflected back into a gutter on the left, a few reaching the floor.",
-    counters: { inn: "signals", out: "orders", veto: "vetoed" },
-  },
   intro:
     "The entry rule is one line. What makes the system trustworthy is everything wrapped around it, each layer able to veto the one before. Read left to right: this is the order a signal passes through.",
   layers: [
@@ -495,24 +496,33 @@ export const next = {
       body: "With the app in the foreground a trade produces both a local notification and a remote push for the same alert. A single app-state guard fixes it.",
     },
   ],
-  closing:
-    "The system is small enough for one person to hold in their head and paranoid enough to run without them watching. That was the whole point.",
+  /** Same sentence, split so the last clause can be set in the accent. */
+  closing: {
+    lead: "The system is small enough for one person to hold in their head and paranoid enough to run without them watching.",
+    accent: "That was the whole point.",
+  },
 } as const;
 
 export const footer = {
-  colophon: "Built with Next.js, GSAP and Lenis. Every figure on this page traces to a file in the repositories as of 10 September 2026.",
-  backToTop: "Back to top",
+  byline: "Himanshu Jangir · 2026 · himanshujangir.com",
+  colophon:
+    "Every figure on this page traces to a file in the repositories as of 10 September 2026. Background tape: NSE bhavcopy, 7 September 2026; motion simulated inside each symbol's real range.",
+  backToTop: "Back to 09:15",
 } as const;
 
 /* ────────────────────────────────────────────────────────────────────────── */
 
-/** Fixed session HUD: the page is a trading day, the scroll is a position. */
-export const hud = {
+/**
+ * The rail: one amber thread down the left edge, drawn by scroll, with a
+ * clock that runs the session as the page runs. The page is a trading day.
+ */
+export const rail = {
   sessionOpen: { h: 9, m: 15 },
   sessionClose: { h: 15, m: 30 },
-  stopLabel: "stop",
-  hint: "Your scroll is a position. The stop only tightens.",
   clockSuffix: "IST",
+  /** Shown beside the thread before the first chapter is reached. */
+  preludeIndex: "00",
+  preludeKicker: "Open",
 } as const;
 
 /** The operations desk, recreated from a screenshot with every figure redacted. */
@@ -580,10 +590,10 @@ export const desk = {
   redacted: "redacted",
 } as const;
 
-/** Cursor labels shown beside the ring over interactive regions. */
-export const cursorLabels = {
-  scrub: "scroll to scrub",
-  sideways: "scroll to move",
-  trace: "trace",
-  open: "open",
-} as const;
+/**
+ * The desk's cumulative P&L curve, traced off the same screenshot. Viewport
+ * is 1000 × 300; the path is drawn on mount and the trade markers are placed
+ * against it by their fractional x position.
+ */
+export const DESK_CURVE =
+  "M0,232 L18,236 L30,246 L40,262 L52,258 L64,250 L72,236 L84,210 L92,170 L100,150 L108,118 L116,96 L124,112 L132,168 L140,172 L152,182 L164,170 L176,168 L190,178 L204,180 L220,182 L236,186 L250,172 L262,160 L276,150 L290,128 L304,114 L318,106 L330,94 L344,60 L356,40 L366,44 L376,52 L390,58 L402,66 L414,62 L428,70 L442,76 L456,74 L470,80 L484,78 L498,84 L512,82 L526,76 L540,80 L554,74 L568,78 L582,70 L596,74 L610,66 L624,70 L638,64 L652,70 L666,62 L680,66 L694,60 L708,64 L722,58 L736,62 L750,54 L764,58 L778,50 L792,52 L806,46 L820,50 L834,44 L848,48 L862,42 L876,46 L890,40 L904,44 L918,36 L932,40 L946,34 L960,38 L974,30 L988,36 L1000,62";

@@ -1,219 +1,216 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { desk } from "@/content/caseStudy";
-import { gsap, registerGsap } from "@/lib/motion";
-import { useReducedMotion } from "@/lib/useReducedMotion";
+import { desk, DESK_CURVE } from "@/content/caseStudy";
+import { gsap, registerGsap, prefersReducedMotion } from "@/lib/motion";
 
-/** Equity-curve silhouette of the day, in a 1000×300 box, values removed. */
-const CURVE =
-  "M0,232 L18,236 L30,246 L40,262 L52,258 L64,250 L72,236 L84,210 L92,170 L100,150 L108,118 L116,96 L124,112 L132,168 L140,172 L152,182 L164,170 L176,168 L190,178 L204,180 L220,182 L236,186 L250,172 L262,160 L276,150 L290,128 L304,114 L318,106 L330,94 L344,60 L356,40 L366,44 L376,52 L390,58 L402,66 L414,62 L428,70 L442,76 L456,74 L470,80 L484,78 L498,84 L512,82 L526,76 L540,80 L554,74 L568,78 L582,70 L596,74 L610,66 L624,70 L638,64 L652,70 L666,62 L680,66 L694,60 L708,64 L722,58 L736,62 L750,54 L764,58 L778,50 L792,52 L806,46 L820,50 L834,44 L848,48 L862,42 L876,46 L890,40 L904,44 L918,36 L932,40 L946,34 L960,38 L974,30 L988,36 L1000,62";
-
-function Redacted({ w = "4ch", sign }: { w?: string; sign?: "+" | "-" }) {
+/** Hatched block standing in for a redacted figure, sized in characters. */
+function Redacted({ ch, sign = false }: { ch: number; sign?: boolean }) {
   return (
-    <span className="redacted" style={{ width: w }} aria-label={desk.redacted} title={desk.redacted}>
-      {sign ? <span className="redacted-sign">{sign}</span> : null}
+    <span className="redacted" style={{ width: `${ch}ch`, marginLeft: sign ? "0.9em" : undefined }}>
+      {sign ? (
+        <span className="redacted-sign" aria-hidden="true">
+          +
+        </span>
+      ) : null}
+      <span className="sr-only">{desk.redacted}</span>
     </span>
   );
 }
 
+const CURVE_POINTS = DESK_CURVE.replace(/[ML]/g, " ")
+  .trim()
+  .split(/\s+/)
+  .map((p) => p.split(",").map(Number) as [number, number]);
+
+/** Vertical position of the curve at a fractional x, as a percentage. */
+function curveTopAt(at: number): number {
+  const x = at * 1000;
+  let best = CURVE_POINTS[0];
+  for (const p of CURVE_POINTS) if (Math.abs(p[0] - x) < Math.abs(best[0] - x)) best = p;
+  return (best[1] / 300) * 100;
+}
+
 /**
- * The operations desk, recreated. Enter sequence: chrome first, then the
- * panels in reading order, the feed items sliding in, the equity curve
- * drawing itself with the markers popping at their positions, then the
- * ledger rows. Every performance figure is a redacted block.
+ * The operations desk on a trading day, recreated from a screenshot. Every
+ * P&L, quantity and storage figure is hatched out by design; the layout, the
+ * markers and the shape of the day are as they were.
  */
 export default function DeskMock() {
-  const reduced = useReducedMotion();
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const root = ref.current;
-    if (!root || reduced) return;
+    const el = ref.current;
+    if (!el || prefersReducedMotion()) return;
     registerGsap();
+    const curve = el.querySelector<SVGPathElement>("[data-curve]");
+    if (!curve) return;
     const ctx = gsap.context(() => {
-      const panels = root.querySelectorAll("[data-panel]");
-      const feed = root.querySelectorAll("[data-feed-item]");
-      const curve = root.querySelector<SVGPathElement>("[data-curve]");
-      const fill = root.querySelector<SVGPathElement>("[data-curve-fill]");
-      const markers = root.querySelectorAll("[data-desk-marker]");
-      const rows = root.querySelectorAll("[data-row]");
-      const files = root.querySelectorAll("[data-file]");
-
-      gsap.set(panels, { autoAlpha: 0, y: 14 });
-      gsap.set(feed, { autoAlpha: 0, x: -10 });
-      if (curve) gsap.set(curve, { drawSVG: "0%" });
-      if (fill) gsap.set(fill, { autoAlpha: 0 });
-      gsap.set(markers, { scale: 0, autoAlpha: 0, transformOrigin: "50% 50%" });
-      gsap.set([rows, files], { autoAlpha: 0, y: 8 });
-
-      const tl = gsap.timeline({
-        defaults: { ease: "reveal" },
-        scrollTrigger: { trigger: root, start: "top 70%", once: true },
-      });
-      tl.to(panels, { autoAlpha: 1, y: 0, duration: 0.8, stagger: 0.08 }, 0)
-        .to(feed, { autoAlpha: 1, x: 0, duration: 0.6, stagger: 0.1 }, 0.4);
-      if (curve) tl.to(curve, { drawSVG: "100%", duration: 2.2, ease: "wipe" }, 0.5);
-      if (fill) tl.to(fill, { autoAlpha: 1, duration: 1.2, ease: "settle" }, 1.2);
-      markers.forEach((m, i) => {
-        const at = Number((m as HTMLElement).dataset.at ?? 0);
-        tl.to(m, { scale: 1, autoAlpha: 1, duration: 0.6, ease: "snap" }, 0.5 + at * 2.2 + i * 0.02);
-      });
-      tl.to(files, { autoAlpha: 1, y: 0, duration: 0.6, stagger: 0.1 }, 1.0)
-        .to(rows, { autoAlpha: 1, y: 0, duration: 0.6, stagger: 0.12 }, 1.6);
-    }, root);
+      gsap.fromTo(
+        curve,
+        { drawSVG: "0%" },
+        { drawSVG: "100%", duration: 2.2, ease: "wipe", delay: 0.4, scrollTrigger: { trigger: el, start: "top 60%", once: true } },
+      );
+    }, el);
     return () => ctx.revert();
-  }, [reduced]);
-
-  const d = desk;
+  }, []);
 
   return (
-    <div ref={ref} className="desk" role="img" aria-label={d.caption}>
-      {/* Top bar */}
-      <div className="desk-top" data-panel>
-        <span className="desk-logo">{d.topbar.logo}</span>
-        <span className="desk-session">{d.topbar.session}</span>
+    <div ref={ref} className="desk" aria-label="Operations desk, recreated from a screenshot" role="img">
+      <div className="desk-top">
+        <span className="desk-logo">{desk.topbar.logo}</span>
+        <span className="desk-dim">{desk.topbar.session}</span>
         <span className="desk-indices">
-          {d.topbar.indices.map((x) => (
-            <span key={x.k}>
-              <span className="desk-dim">{x.k}:</span> {x.v} <span className="desk-down">({x.chg})</span>
+          {desk.topbar.indices.map((ix) => (
+            <span key={ix.k}>
+              <span className="desk-dim">{ix.k}:</span> {ix.v} <span className="desk-down">({ix.chg})</span>
             </span>
           ))}
         </span>
         <span className="desk-tabs">
-          {d.topbar.tabs.map((t, i) => (
-            <span key={t} className={i === 0 ? "is-on" : ""}>
+          {desk.topbar.tabs.map((t, i) => (
+            <span key={t} className={i === 0 ? "is-on" : undefined}>
               {t}
             </span>
           ))}
         </span>
         <span className="desk-assets">
-          {d.topbar.assets.map((t, i) => (
-            <span key={t} className={i === 1 ? "is-on" : ""}>
-              {t}
+          {desk.topbar.assets.map((a, i) => (
+            <span key={a} className={i === 1 ? "is-on" : undefined}>
+              {a}
             </span>
           ))}
         </span>
-        <span className="desk-actions">
-          <span className="desk-btn">{d.topbar.actions[0]}</span>
-          <span className="desk-btn desk-btn-halt">{d.topbar.actions[1]}</span>
+        <span className="flex gap-2">
+          {desk.topbar.actions.map((a) => (
+            <span key={a} className={`desk-btn${a === "HALT" ? " desk-btn-halt" : ""}`}>
+              {a}
+            </span>
+          ))}
         </span>
       </div>
 
       <div className="desk-grid">
-        {/* Live feed */}
-        <div className="desk-panel desk-feed" data-panel>
+        <div className="desk-panel desk-feed">
           <div className="desk-panel-head">
-            <span className="desk-live-dot" /> {d.feed.title}
-            <span className="desk-dim">{d.feed.tag}</span>
+            <span className="desk-live-dot" /> {desk.feed.title}
+            <span className="desk-dim ml-auto">{desk.feed.tag}</span>
           </div>
-          <ul>
-            {d.feed.items.map((it) => (
-              <li key={it.t} data-feed-item>
-                <span className="desk-chip">{it.src}</span>
-                <span className="desk-dim">{it.t}</span>
-                <p>{it.text}</p>
+          <ul className="m-0 flex list-none flex-col gap-2 p-0">
+            {desk.feed.items.map((f) => (
+              <li key={f.text} className="border-b border-desk-line pb-2">
+                <span className="desk-chip">{f.src}</span>
+                <span className="desk-dim">{f.t}</span>
+                <p className="mt-1 mb-0">{f.text}</p>
               </li>
             ))}
           </ul>
         </div>
 
-        {/* Portfolio */}
-        <div className="desk-panel desk-portfolio" data-panel>
+        <div className="desk-panel desk-portfolio">
           <div className="desk-panel-head">
-            {d.portfolio.title}
-            <span className="desk-up">LIVE</span>
+            {desk.portfolio.title}
+            <span className="desk-up ml-auto">LIVE</span>
           </div>
-          <ul>
-            {d.portfolio.rows.map((r, i) => (
-              <li key={i}>
+          <ul className="m-0 list-none p-0">
+            {desk.portfolio.rows.map((r) => (
+              <li key={`${r.side}-${r.sym}`} className="grid grid-cols-[1fr_auto_auto] gap-3 py-1">
                 <span className="desk-up">
                   {r.side} {r.sym}
                 </span>
-                <Redacted w="5ch" sign="+" />
-                <Redacted w="6ch" sign="+" />
+                <Redacted ch={5} sign />
+                <Redacted ch={6} sign />
               </li>
             ))}
           </ul>
         </div>
 
-        {/* Equity curve */}
-        <div className="desk-panel desk-chart" data-panel>
+        <div className="desk-panel desk-chart">
           <div className="desk-panel-head">
-            {d.chart.title}
-            <span className="desk-stats">
-              {d.chart.stats.map((s, i) => (
-                <span key={s}>
+            {desk.chart.title}
+            <span className="ml-auto flex gap-5">
+              {desk.chart.stats.map((s) => (
+                <span key={s} className="flex flex-col items-end gap-0.5">
                   <span className="desk-dim">{s}</span>
-                  {i === 3 ? <b>{d.chart.tradesCount}</b> : <Redacted w={i === 2 ? "4ch" : "6ch"} />}
+                  {s === "TRADES" ? (
+                    <b className="text-[0.9rem]">{desk.chart.tradesCount}</b>
+                  ) : (
+                    <Redacted ch={s === "WIN RATE" ? 4 : 6} />
+                  )}
                 </span>
               ))}
             </span>
           </div>
+
           <div className="desk-big">
-            <Redacted w="9ch" sign="+" />
-            <span className="desk-dim">UNREALIZED P/L: —</span>
+            <Redacted ch={9} sign />
+            <span className="desk-dim text-[0.62rem]">UNREALIZED P/L: —</span>
           </div>
-          <svg viewBox="0 0 1000 300" className="desk-svg" aria-hidden="true" preserveAspectRatio="none">
+
+          <svg viewBox="0 0 1000 300" preserveAspectRatio="none" className="desk-svg" aria-hidden="true">
             <defs>
               <linearGradient id="desk-fill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stopColor="var(--up)" stopOpacity="0.28" />
-                <stop offset="1" stopColor="var(--up)" stopOpacity="0" />
+                <stop offset="0" stopColor="var(--desk-up)" stopOpacity="0.22" />
+                <stop offset="1" stopColor="var(--desk-up)" stopOpacity="0" />
               </linearGradient>
             </defs>
-            {[0.25, 0.5, 0.75].map((f) => (
-              <line key={f} x1="0" x2="1000" y1={300 * f} y2={300 * f} stroke="var(--fg)" strokeOpacity="0.06" />
+            {[75, 150, 225].map((y) => (
+              <line key={y} x1="0" x2="1000" y1={y} y2={y} stroke="var(--desk-fg)" strokeOpacity="0.06" />
             ))}
-            <line x1="0" x2="1000" y1="232" y2="232" stroke="var(--fg)" strokeOpacity="0.18" strokeDasharray="3 5" />
-            <path data-curve-fill d={`${CURVE} L1000,300 L0,300 Z`} fill="url(#desk-fill)" />
-            <path data-curve d={CURVE} fill="none" stroke="var(--up)" strokeWidth="2.5" />
+            {/* Break-even, where the day started. */}
+            <line x1="0" x2="1000" y1="232" y2="232" stroke="var(--desk-fg)" strokeOpacity="0.18" strokeDasharray="3 5" />
+            <path d={`${DESK_CURVE} L1000,300 L0,300 Z`} fill="url(#desk-fill)" />
+            <path data-curve d={DESK_CURVE} fill="none" stroke="var(--desk-up)" strokeWidth="2.5" />
           </svg>
-          <div className="desk-markers" aria-hidden="true">
-            {d.chart.markers.map((m, i) => (
+
+          <div className="desk-markers">
+            {desk.chart.markers.map((m, i) => (
               <span
-                key={i}
-                data-desk-marker
-                data-at={m.at}
-                className={`desk-marker desk-marker-${m.kind}`}
-                style={{ left: `${m.at * 100}%`, top: `${markerTop(m.at)}%` }}
+                key={`${m.label}-${i}`}
+                className="desk-marker"
+                data-kind={m.kind}
+                style={{ left: `${m.at * 100}%`, top: `${curveTopAt(m.at)}%` }}
               >
                 {m.kind === "buy" ? "▲" : "▼"} {m.label}
               </span>
             ))}
           </div>
-          <div className="desk-times">
-            {d.chart.times.map((t) => (
+
+          <div className="desk-dim mt-1 flex justify-between">
+            {desk.chart.times.map((t) => (
               <span key={t}>{t}</span>
             ))}
           </div>
         </div>
 
-        {/* Console / files */}
-        <div className="desk-panel desk-console" data-panel>
+        <div className="desk-panel desk-console">
           <div className="desk-panel-head">
-            {d.console.title}
-            <span className="desk-tabs desk-tabs-sm">
-              {d.console.tabs.map((t, i) => (
-                <span key={t} className={i === 2 ? "is-on" : ""}>
+            {desk.console.title}
+            <span className="desk-dim ml-3 flex gap-2.5 tracking-[0.08em]">
+              {desk.console.tabs.map((t, i) => (
+                <span key={t} className={i === desk.console.tabs.length - 1 ? "is-on text-desk-accent" : undefined}>
                   {t}
                 </span>
               ))}
             </span>
-            <span className="desk-dim">
-              <span className="desk-live-dot" /> {d.console.filesLabel}
+            <span className="desk-dim ml-auto">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-desk-up" /> {desk.console.filesLabel}
             </span>
           </div>
-          <ul className="desk-files">
-            {d.console.files.map((f) => (
-              <li key={f.name} data-file>
-                <span className="desk-file-icon" />
-                <span className="desk-file-meta">
+          <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+            {desk.console.files.map((f) => (
+              <li
+                key={f.name}
+                className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5 border border-desk-line px-2 py-1.5"
+              >
+                <span className="h-6 w-6 border border-desk-line" />
+                <span className="flex min-w-0 flex-col">
                   <b>{f.name}</b>
-                  <span className="desk-dim">{f.path}</span>
+                  <span className="desk-dim truncate">{f.path}</span>
                 </span>
-                <span className="desk-file-actions">
+                <span className="flex gap-1.5">
                   {f.actions.map((a) => (
-                    <span key={a} className={`desk-btn ${a === "VIEW" ? "desk-btn-accent" : ""}`}>
+                    <span key={a} className={`desk-btn${a === "VIEW" ? " text-desk-up border-desk-up" : ""}`}>
                       {a}
                     </span>
                   ))}
@@ -223,40 +220,39 @@ export default function DeskMock() {
           </ul>
         </div>
 
-        {/* Ledger */}
-        <div className="desk-panel desk-ledger" data-panel>
+        <div className="desk-panel desk-ledger">
           <div className="desk-panel-head">
-            {d.ledger.title}
-            <span className="desk-up">LIVE</span>
+            {desk.ledger.title}
+            <span className="desk-up ml-auto">LIVE</span>
           </div>
           <table>
             <thead>
               <tr>
-                {d.ledger.columns.map((c) => (
+                {desk.ledger.columns.map((c) => (
                   <th key={c}>{c}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {d.ledger.rows.map((r, i) => (
-                <tr key={i} data-row>
+              {desk.ledger.rows.map((r) => (
+                <tr key={`${r.entry}-${r.sym}`}>
                   <td>{r.entry}</td>
                   <td>{r.exit}</td>
                   <td>{r.sym}</td>
                   <td className={r.type === "BUY" ? "desk-up" : "desk-down"}>{r.type}</td>
                   <td>
-                    <Redacted w="3ch" />
+                    <Redacted ch={3} />
                   </td>
                   <td>{r.entryPx}</td>
                   <td>{r.exitPx}</td>
                   <td>
-                    <Redacted w="4ch" sign="+" />
+                    <Redacted ch={4} sign />
                   </td>
                   <td>
-                    <Redacted w="5ch" sign="-" />
+                    <Redacted ch={5} sign />
                   </td>
                   <td>
-                    <Redacted w="5ch" sign="+" />
+                    <Redacted ch={5} sign />
                   </td>
                 </tr>
               ))}
@@ -266,16 +262,4 @@ export default function DeskMock() {
       </div>
     </div>
   );
-}
-
-/** Approximate the curve's height at a fraction of its width, for marker placement. */
-function markerTop(at: number): number {
-  const pts = CURVE.replace(/[ML]/g, "")
-    .trim()
-    .split(/\s+/)
-    .map((p) => p.split(",").map(Number));
-  const x = at * 1000;
-  let best = pts[0];
-  for (const p of pts) if (Math.abs(p[0] - x) < Math.abs(best[0] - x)) best = p;
-  return (best[1] / 300) * 100;
 }

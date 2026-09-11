@@ -1,121 +1,138 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
-import { problems, sectionById } from "@/content/caseStudy";
-import { gsap, ScrollTrigger, registerGsap, prefersReducedMotion } from "@/lib/motion";
-import { useReducedMotion } from "@/lib/useReducedMotion";
-import { useSectionTheme } from "@/lib/useSectionTheme";
+import { useEffect, useRef } from "react";
+import { problems, sectionBySlug } from "@/content/caseStudy";
+import { gsap, registerGsap, ScrollTrigger, prefersReducedMotion } from "@/lib/motion";
 import { useReveal } from "@/lib/useReveal";
-import SectionHeader from "@/components/SectionHeader";
+import ChapterHeader from "@/components/ChapterHeader";
 
-const meta = sectionById("problems");
-
-function Entry({ p }: { p: (typeof problems.items)[number] }) {
-  const ref = useRef<HTMLElement>(null);
-  const numRef = useRef<HTMLSpanElement>(null);
-  useReveal(ref, { selector: "[data-item]", stagger: 0.09, y: 18 });
-  // The big index numeral drifts slower than the page: a quiet depth cue.
-  useEffect(() => {
-    const el = ref.current;
-    const num = numRef.current;
-    if (!el || !num || prefersReducedMotion()) return;
-    registerGsap();
-    const tween = gsap.fromTo(
-      num,
-      { yPercent: 30 },
-      { yPercent: -30, ease: "none", scrollTrigger: { trigger: el, start: "top bottom", end: "bottom top", scrub: true } },
-    );
-    return () => {
-      tween.scrollTrigger?.kill();
-      tween.kill();
-    };
-  }, []);
-  return (
-    <article ref={ref} id={`problem-${p.n}`} data-problem={p.n} className="relative border-t border-line py-10 md:py-14">
-      <span ref={numRef} aria-hidden="true" className="problem-numeral" data-n={p.n} />
-      <h3 data-item className="js-reveal flex items-baseline gap-4 font-serif text-[clamp(1.5rem,2.4vw,2.2rem)] font-normal leading-[1.15] tracking-[-0.01em] text-fg">
-        <span className="font-mono text-[0.72rem] text-accent">{p.n}</span>
-        {p.title}
-      </h3>
-      <div className="mt-7 grid grid-cols-1 gap-7 md:grid-cols-2 md:gap-10">
-        <div data-item className="js-reveal">
-          <h4 className="mb-2 font-sans text-[0.7rem] font-medium uppercase tracking-[0.12em] text-down">The failure</h4>
-          <p className="text-[1rem] leading-[1.5] text-fg/85">{p.failure}</p>
-        </div>
-        <div data-item className="js-reveal">
-          <h4 className="mb-2 font-sans text-[0.7rem] font-medium uppercase tracking-[0.12em] text-up">The fix</h4>
-          <p className="text-[1rem] leading-[1.5] text-fg/85">{p.fix}</p>
-        </div>
-      </div>
-      <ul data-item className="js-reveal mt-6 flex flex-wrap gap-x-6 gap-y-1.5 font-mono text-[0.68rem] text-muted">
-        {p.where.map((w) => (
-          <li key={w}>{w}</li>
-        ))}
-      </ul>
-    </article>
-  );
-}
+const meta = sectionBySlug("problems");
 
 export default function Problems() {
-  const reduced = useReducedMotion();
-  const ref = useRef<HTMLElement>(null);
-  const [active, setActive] = useState(problems.items[0].n);
-  useSectionTheme(ref, meta.theme);
+  const listRef = useRef<HTMLDivElement>(null);
+  const navRef = useRef<HTMLOListElement>(null);
+  useReveal(listRef, { selector: "[data-item]", stagger: 0.08 });
 
-  // Sticky index follows the entry crossing the viewport midline.
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
+    const listEl = listRef.current;
+    const navEl = navRef.current;
+    if (!listEl || !navEl || prefersReducedMotion()) return;
     registerGsap();
-    const triggers = problems.items.map((p) =>
-      ScrollTrigger.create({
-        trigger: el.querySelector(`[data-problem="${p.n}"]`),
+
+    const entries = Array.from(listEl.querySelectorAll<HTMLElement>("[data-problem]"));
+    const navItems = Array.from(navEl.querySelectorAll<HTMLElement>("[data-nav]"));
+
+    const mark = (n: string | undefined, on: boolean) => {
+      for (const item of navItems) {
+        if (item.dataset.nav === n) item.dataset.on = on ? "1" : "0";
+      }
+    };
+
+    const triggers: ReturnType<typeof ScrollTrigger.create>[] = [];
+    const cleanups = entries.map((entry) => {
+      const n = entry.dataset.problem;
+
+      // The index marks whichever entry crosses the viewport's upper middle,
+      // so the dot moves with the text rather than with a section boundary.
+      const active = ScrollTrigger.create({
+        trigger: entry,
         start: "top 55%",
         end: "bottom 55%",
-        onToggle: (self) => self.isActive && setActive(p.n),
-      }),
-    );
-    return () => triggers.forEach((t) => t.kill());
+        onToggle: (self) => mark(n, self.isActive),
+      });
+      triggers.push(active);
+
+      // The numeral drifts against the scroll, so it reads as set behind the
+      // page rather than printed on it.
+      const numeral = entry.querySelector<HTMLElement>(".problem-numeral");
+      const drift = numeral
+        ? gsap.fromTo(
+            numeral,
+            { yPercent: -20 },
+            {
+              yPercent: 20,
+              ease: "none",
+              scrollTrigger: { trigger: entry, start: "top bottom", end: "bottom top", scrub: true },
+            },
+          )
+        : null;
+
+      return () => {
+        active.kill();
+        drift?.scrollTrigger?.kill();
+        drift?.kill();
+      };
+    });
+
+    // onToggle only fires on a crossing, so a page that loads (or is deep
+    // linked) mid-chapter would keep the markup's default. Sync once from
+    // what the triggers actually say, and again whenever they re-measure.
+    const sync = () => entries.forEach((entry, i) => mark(entry.dataset.problem, triggers[i].isActive));
+    sync();
+    ScrollTrigger.addEventListener("refresh", sync);
+
+    return () => {
+      ScrollTrigger.removeEventListener("refresh", sync);
+      cleanups.forEach((kill) => kill());
+    };
   }, []);
 
   return (
-    <section ref={ref} id={meta.id} aria-labelledby={`${meta.id}-title`} className="section-pad">
-      <SectionHeader meta={meta} intro={problems.intro} />
+    <section id={meta.id} aria-labelledby={`${meta.id}-title`} className="section-pad border-t border-line">
+      <ChapterHeader meta={meta} intro={problems.intro} />
 
-      <div className="grid grid-cols-1 gap-10 lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-20">
+      <div className="grid gap-16 lg:grid-cols-[minmax(0,13rem)_minmax(0,1fr)]">
         <nav aria-label="Hard problems" className="hidden lg:block">
-          <ol className="sticky top-24 flex flex-col gap-2.5">
-            {problems.items.map((p) => {
-              const isActive = p.n === active;
-              return (
-                <li key={p.n} className="relative pl-5">
-                  {isActive ? (
-                    <motion.span
-                      layoutId={reduced ? undefined : "problem-indicator"}
-                      className="absolute left-0 top-[0.55em] h-1.5 w-1.5 rounded-full bg-accent"
-                      transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-                    />
-                  ) : null}
-                  <a
-                    href={`#problem-${p.n}`}
-                    data-cursor="link"
-                    className={`text-[0.82rem] leading-[1.4] transition-colors duration-500 [transition-timing-function:var(--ease-reveal)] ${
-                      isActive ? "text-fg" : "text-muted hover:text-fg/80"
-                    }`}
-                  >
-                    <span className="mr-2 font-mono text-[0.66rem]">{p.n}</span>
-                    {p.title}
-                  </a>
-                </li>
-              );
-            })}
+          <ol ref={navRef} className="sticky top-24 m-0 flex list-none flex-col gap-2.5 p-0">
+            {problems.items.map((p) => (
+              <li key={p.n} data-nav={p.n} data-on="0" className="relative pl-[1.1rem]">
+                <span className="problem-dot" aria-hidden="true" />
+                <a href={`#problem-${p.n}`} className="problem-link text-[0.8rem] leading-[1.4]">
+                  <span className="mr-2 font-mono text-[0.62rem]">{p.n}</span>
+                  {p.title}
+                </a>
+              </li>
+            ))}
           </ol>
         </nav>
 
-        <div className="min-w-0">
+        <div ref={listRef} className="min-w-0">
           {problems.items.map((p) => (
-            <Entry key={p.n} p={p} />
+            <article
+              key={p.n}
+              id={`problem-${p.n}`}
+              data-problem={p.n}
+              className="relative border-t border-line py-14"
+            >
+              <span aria-hidden="true" className="problem-numeral">
+                {p.n}
+              </span>
+              <h3
+                data-item
+                className="js-reveal m-0 flex max-w-[24ch] items-baseline gap-4 text-[clamp(1.5rem,2.6vw,2.4rem)] leading-[1.08] font-semibold tracking-[-0.025em] text-balance"
+              >
+                <span className="font-mono text-[0.68rem] font-normal text-accent">{p.n}</span>
+                {p.title}
+              </h3>
+              <div className="mt-7 grid grid-cols-[repeat(auto-fit,minmax(18rem,1fr))] gap-10">
+                <div data-item className="js-reveal">
+                  <h4 className="label-mono mb-2.5 text-down">The failure</h4>
+                  <p className="m-0 text-[0.98rem] leading-[1.5] text-fg/85">{p.failure}</p>
+                </div>
+                <div data-item className="js-reveal">
+                  <h4 className="label-mono mb-2.5 text-up">The fix</h4>
+                  <p className="m-0 text-[0.98rem] leading-[1.5] text-fg/85">{p.fix}</p>
+                </div>
+              </div>
+              <ul
+                data-item
+                className="js-reveal mt-6 mb-0 flex list-none flex-wrap gap-x-6 gap-y-1.5 p-0 font-mono text-[0.64rem] text-muted"
+              >
+                {p.where.map((w) => (
+                  <li key={w}>{w}</li>
+                ))}
+              </ul>
+            </article>
           ))}
         </div>
       </div>

@@ -60,7 +60,9 @@ export default function Surfaces() {
         ref={phoneRef}
         className="mt-24 grid gap-16 border-t border-line pt-16 lg:grid-cols-[minmax(17rem,18rem)_minmax(0,1fr)]"
       >
-        <div data-item className="js-reveal flex justify-start">
+        {/* items-start, or the handset stretches to the height of the facts
+            column beside it and the shell hangs below its own screen. */}
+        <div data-item className="js-reveal flex items-start justify-start">
           <PhoneMock />
         </div>
         <div className="flex flex-col gap-8">

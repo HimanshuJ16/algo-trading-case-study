@@ -760,6 +760,9 @@ li[data-on="1"] .problem-link {
    ────────────────────────────────────────────────────────────── */
 .phone {
   position: relative;
+  /* The shell is exactly its screen plus the bezel. Never let a flex or grid
+     parent stretch it, or it hangs below the device. */
+  align-self: flex-start;
   width: 17rem;
   padding: 0.55rem;
   border-radius: 2.4rem;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { archEdges, archNodes, neighbourhood, VIEW } from "@/lib/archLayout";
+import { archEdges, archNodes, neighbourhood, NODE_LABEL_SIZE, SUB_SIZE, VIEW } from "@/lib/archLayout";
 import { gsap, registerGsap, prefersReducedMotion } from "@/lib/motion";
 
 const MONO = "var(--font-plex-mono), ui-monospace, monospace";
@@ -84,24 +84,27 @@ export default function ArchDiagram() {
             strokeWidth="1"
           />
           <text
-            x={n.x + 16}
-            y={n.y + 28}
-            fontSize="14.5"
+            x={n.textX}
+            y={n.labelY}
+            fontSize={NODE_LABEL_SIZE}
             fontWeight="600"
             fill={n.primary ? "var(--accent-ink)" : "var(--fg)"}
             fontFamily={SANS}
           >
             {n.label}
           </text>
-          <text
-            x={n.x + 16}
-            y={n.y + 50}
-            fontSize="10.2"
-            fill={n.primary ? "rgba(26,18,7,.8)" : "var(--muted)"}
-            fontFamily={MONO}
-          >
-            {n.sub}
-          </text>
+          {n.subLines.map((line) => (
+            <text
+              key={line.text}
+              x={n.textX}
+              y={line.y}
+              fontSize={SUB_SIZE}
+              fill={n.primary ? "rgba(26,18,7,.8)" : "var(--muted)"}
+              fontFamily={MONO}
+            >
+              {line.text}
+            </text>
+          ))}
         </g>
       ))}
 

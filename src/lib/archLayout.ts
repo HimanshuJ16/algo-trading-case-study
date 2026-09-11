@@ -58,12 +58,63 @@ function roundedPath(pts: [number, number][], r = 10): string {
 
 const LABEL_SIZE = 9.1;
 
+/* Node text metrics. The sub line is monospaced, so it can be measured
+   without the DOM: IBM Plex Mono advances 0.6em, and 0.62 leaves headroom for
+   a wider fallback face while the webfont is still loading. */
+export const NODE_LABEL_SIZE = 14.5;
+export const SUB_SIZE = 10.2;
+const SUB_CHAR = SUB_SIZE * 0.62;
+const SUB_LINE_H = 14;
+const TEXT_PAD = 16;
+const LABEL_GAP = 8;
+
+/**
+ * Fit a node's sub line to its box. The subs read as lists separated by " · ",
+ * so lines break at those separators first, and a segment is hard-wrapped on
+ * spaces only when it is too wide for the box on its own.
+ */
+function wrapSub(text: string, boxW: number): string[] {
+  const budget = Math.max(8, Math.floor((boxW - TEXT_PAD * 2) / SUB_CHAR));
+  const lines: string[] = [];
+  let line = "";
+  const flush = () => {
+    if (line) lines.push(line);
+    line = "";
+  };
+
+  for (const segment of text.split(" · ")) {
+    const joined = line ? `${line} · ${segment}` : segment;
+    if (joined.length <= budget) {
+      line = joined;
+      continue;
+    }
+    flush();
+    if (segment.length <= budget) {
+      line = segment;
+      continue;
+    }
+    for (const word of segment.split(" ")) {
+      const next = line ? `${line} ${word}` : word;
+      if (next.length <= budget) line = next;
+      else {
+        flush();
+        line = word;
+      }
+    }
+  }
+  flush();
+  return lines;
+}
+
 export type ArchNode = {
   id: string;
   label: string;
-  sub: string;
   /** The engine is the one filled box: everything else is drawn around it. */
   primary: boolean;
+  textX: number;
+  labelY: number;
+  /** The sub line broken to fit the box, with a baseline for each line. */
+  subLines: { text: string; y: number }[];
 } & Box;
 
 export type ArchEdge = {
@@ -78,13 +129,24 @@ export type ArchEdge = {
   labelAnchor: { x: number; y: number };
 };
 
-export const archNodes: ArchNode[] = architecture.nodes.map((n) => ({
-  id: n.id,
-  label: n.label,
-  sub: n.sub,
-  primary: n.group === "engine",
-  ...BOXES[n.id],
-}));
+export const archNodes: ArchNode[] = architecture.nodes.map((n) => {
+  const box = BOXES[n.id];
+  const lines = wrapSub(n.sub, box.w);
+  // Centre the label-and-sub block in the box, so one that wraps to two lines
+  // stays balanced instead of pushing its second line onto the bottom edge.
+  const blockH = NODE_LABEL_SIZE + LABEL_GAP + SUB_SIZE + (lines.length - 1) * SUB_LINE_H;
+  const labelY = box.y + (box.h - blockH) / 2 + NODE_LABEL_SIZE;
+  const firstSub = labelY + LABEL_GAP + SUB_SIZE;
+  return {
+    id: n.id,
+    label: n.label,
+    primary: n.group === "engine",
+    ...box,
+    textX: box.x + TEXT_PAD,
+    labelY,
+    subLines: lines.map((text, i) => ({ text, y: firstSub + i * SUB_LINE_H })),
+  };
+});
 
 export const archEdges: ArchEdge[] = architecture.edges.map((e) => {
   const key = `${e.from}>${e.to}>${e.label}`;

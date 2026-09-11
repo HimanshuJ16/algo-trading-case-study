@@ -6,7 +6,11 @@ export const tapeRows = tape.rows as TapeRow[];
 export const tapeDate = tape.date as string;
 
 export const priceFmt = new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-export const chgFmt = new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2, signDisplay: "always" });
+export const chgFmt = new Intl.NumberFormat("en-IN", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+  signDisplay: "always",
+});
 
 /** Deterministic PRNG so every client starts from the same sequence. */
 export function mulberry32(seed: number) {
@@ -22,43 +26,45 @@ export function mulberry32(seed: number) {
 export const changePct = (price: number, r: TapeRow) => ((price - r.p) / r.p) * 100;
 
 /**
- * Nudges one symbol's price inside its real day range and writes it into
- * every cell that displays it. Returns the new price. DOM-only, no React.
+ * Nudges one symbol's price inside its real high–low range for the day and
+ * writes it into every row that displays it. The range is real; the walk
+ * inside it is not. DOM-only, so a tick never re-renders React.
  */
 export function tickSymbol(
   idx: number,
   price: number[],
-  cells: Map<number, HTMLElement[]>,
+  rowsByIndex: Map<number, HTMLElement[]>,
   rand: () => number,
 ): number {
   const r = tapeRows[idx];
-  const range = r.h - r.l;
-  const step = (rand() - 0.5) * range * 0.06;
+  const step = (rand() - 0.5) * (r.h - r.l) * 0.06;
   const next = Math.min(r.h, Math.max(r.l, price[idx] + step));
-  const dir = next > price[idx] ? "up" : next < price[idx] ? "down" : "";
   price[idx] = next;
   const chg = changePct(next, r);
-  for (const cell of cells.get(idx) ?? []) {
-    const px = cell.querySelector(".tape-px");
-    const ch = cell.querySelector(".tape-chg");
+  const dir = chg > 0 ? "up" : chg < 0 ? "down" : "";
+  for (const row of rowsByIndex.get(idx) ?? []) {
+    const px = row.querySelector(".ledger-px");
+    const ch = row.querySelector<HTMLElement>(".ledger-chg");
     if (px) px.textContent = priceFmt.format(next);
-    if (ch) ch.textContent = `${chgFmt.format(chg)}%`;
-    if (dir) cell.dataset.dir = dir;
-    cell.classList.add("is-flash");
-    window.setTimeout(() => cell.classList.remove("is-flash"), 90);
+    if (ch) {
+      ch.textContent = `${chgFmt.format(chg)}%`;
+      ch.dataset.dir = dir;
+    }
+    row.classList.add("is-flash");
+    window.setTimeout(() => row.classList.remove("is-flash"), 120);
   }
   return next;
 }
 
-/** Collect every element carrying data-i, keyed by symbol index. */
-export function collectCells(root: HTMLElement): Map<number, HTMLElement[]> {
-  const cells = new Map<number, HTMLElement[]>();
-  root.querySelectorAll<HTMLElement>("[data-i]").forEach((cell) => {
-    const i = Number(cell.dataset.i);
+/** Collect every row carrying data-i, keyed by symbol index. */
+export function collectRows(root: HTMLElement): Map<number, HTMLElement[]> {
+  const rows = new Map<number, HTMLElement[]>();
+  root.querySelectorAll<HTMLElement>("[data-i]").forEach((row) => {
+    const i = Number(row.dataset.i);
     if (Number.isNaN(i) || i < 0) return;
-    const list = cells.get(i) ?? [];
-    list.push(cell);
-    cells.set(i, list);
+    const list = rows.get(i) ?? [];
+    list.push(row);
+    rows.set(i, list);
   });
-  return cells;
+  return rows;
 }

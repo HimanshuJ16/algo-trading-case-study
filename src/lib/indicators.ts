@@ -124,3 +124,57 @@ export function firstLongFlip(dir: number[], from: number, to: number): number {
   }
   return -1;
 }
+
+export type BarsFile = {
+  symbol: string;
+  date: string;
+  provisional?: boolean;
+  warmup?: Bar[];
+  bars: Bar[];
+  entry?: { t: string; price: number };
+  exit?: { t: string; price: number; reason?: string };
+};
+
+export type TradeModel = {
+  bars: Bar[];
+  /** Supertrend line, direction and ATR, sliced back to the session. */
+  line: number[];
+  dir: number[];
+  atr: number[];
+  sim: TradeSim;
+};
+
+/**
+ * Build the chart model from a bars file, the way the engine seeds itself:
+ * warm-up bars are prepended so Supertrend(20, 1) and ATR(14) are already
+ * converged when the session's first bar closes, then the indicator series
+ * and the simulated trade are sliced back to the session's own indices.
+ *
+ * A recorded entry is honoured if the file has one; otherwise the first long
+ * flip in the session is used, and failing that a bar early enough to leave
+ * the trade room to run. Pure, so the chart renders identically on the server.
+ */
+export function buildModel(data: BarsFile): TradeModel {
+  const warm = data.warmup ?? [];
+  const all = [...warm, ...data.bars];
+  const st = supertrend(all, 20, 1);
+  const off = warm.length;
+
+  let entryAll = data.entry ? all.findIndex((b, i) => i >= off && b.t === data.entry!.t) : -1;
+  if (entryAll < 0) entryAll = firstLongFlip(st.dir, off + 1, all.length - 2);
+  if (entryAll < 0) entryAll = off + Math.min(4, data.bars.length - 2);
+
+  const sim = simulateLong(all, st.atr, entryAll);
+  return {
+    bars: data.bars,
+    line: st.line.slice(off),
+    dir: st.dir.slice(off),
+    atr: st.atr.slice(off),
+    sim: {
+      ...sim,
+      entryIdx: sim.entryIdx - off,
+      exitIdx: sim.exitIdx - off,
+      stops: sim.stops.slice(off),
+    },
+  };
+}

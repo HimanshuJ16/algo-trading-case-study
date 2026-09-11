@@ -1,40 +1,25 @@
 "use client";
 
+import { useRef } from "react";
 import { sections } from "@/content/caseStudy";
-import { useLenis } from "@/components/SmoothScroll";
-import { easeOutExpo } from "@/lib/motion";
+import { useReveal } from "@/lib/useReveal";
 
-/**
- * In-page contents. Anchors work natively; when Lenis is running, clicks are
- * routed through it so the scroll is eased instead of jumping.
- */
+/** The eight chapters as a table of contents, and the page's real nav. */
 export default function Contents() {
-  const lenisRef = useLenis();
-
-  const go = (e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
-    const lenis = lenisRef.current;
-    if (!lenis) return; // native anchor behaviour
-    const target = document.getElementById(id);
-    if (!target) return;
-    e.preventDefault();
-    lenis.scrollTo(target, { duration: 1.4, easing: easeOutExpo });
-    history.replaceState(null, "", `#${id}`);
-  };
+  const ref = useRef<HTMLElement>(null);
+  useReveal(ref, { selector: "[data-item]", stagger: 0.05, y: 14 });
 
   return (
-    <nav aria-label="Contents" className="border-t border-line px-5 py-10 sm:px-8 md:px-12 lg:px-16">
-      <p className="mb-6 font-sans text-[0.72rem] font-medium uppercase tracking-[0.12em] text-muted">Contents</p>
-      <ol className="grid gap-x-10 gap-y-3 md:grid-cols-2 lg:grid-cols-4">
+    <nav ref={ref} aria-label="Chapters" className="pad-x border-b border-line py-10">
+      <ol className="m-0 grid list-none grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-x-8 gap-y-2 p-0">
         {sections.map((s) => (
-          <li key={s.id} className="flex items-baseline gap-3">
-            <span className="font-mono text-xs text-muted">{s.index}</span>
+          <li key={s.id} data-item className="js-reveal">
             <a
               href={`#${s.id}`}
-              onClick={(e) => go(e, s.id)}
-              data-cursor="link"
-              className="text-[1rem] text-fg/90 underline-offset-4 transition-colors duration-300 hover:text-accent hover:underline"
+              className="grid grid-cols-[2.2rem_minmax(0,1fr)] items-baseline border-t border-line py-2.5 text-[0.92rem] text-fg/85 transition-colors hover:text-accent"
             >
-              {s.title}
+              <span className="font-mono text-[0.64rem] text-accent">{s.index}</span>
+              <span>{s.title}</span>
             </a>
           </li>
         ))}
